@@ -2,34 +2,20 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
+	"time"
 
-	"github.com/jemgunay/grpc-test/simple"
 	"google.golang.org/grpc"
+
+	pb "github.com/jemgunay/grpc-test/pubsub"
 )
 
 type server struct{}
 
-func (s *server) SimpleRPC(stream simple.SimpleService_SimpleRPCServer) error {
-	log.Println("Started stream")
-	for {
-		in, err := stream.Recv()
-		log.Println("Received value")
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		log.Println("Got " + in.Msg)
-	}
-}
-
 func main() {
 	grpcServer := grpc.NewServer()
-	simple.RegisterSimpleServiceServer(grpcServer, &server{})
+	pb.RegisterPublisherServiceServer(grpcServer, &server{})
 
 	l, err := net.Listen("tcp", ":6000")
 	if err != nil {
@@ -40,4 +26,31 @@ func main() {
 	if err = grpcServer.Serve(l); err != nil {
 		fmt.Printf("server has shut down: %s", err)
 	}
+}
+
+var topics = map[string][]string{
+	"animals":   {"cat", "dog", "giraffe", "hippo", "monkey", "tiger"},
+	"countries": {"Brazil", "Spain", "France", "Turkey", "Italy", "Japan"},
+}
+
+func (s *server) Subscribe(p *pb.Topic, stream pb.PublisherService_SubscribeServer) error {
+	log.Printf("a client subscribed to %s", p.Name)
+
+	items, ok := topics[p.Name]
+	if !ok {
+		return fmt.Errorf("%s is not a supported topic", p.Name)
+	}
+
+	for _, item := range items {
+		msg := &pb.Message{
+			Msg:       item,
+			Timestamp: time.Now().String(),
+		}
+
+		if err := stream.Send(msg); err != nil {
+			return err
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
+	return nil
 }
