@@ -2,15 +2,24 @@ syntax = "proto3";
 
 package pubsub;
 
-service PublisherService {
-    rpc Subscribe (Topic) returns (stream Message) {}
+service PubSubService {
+    rpc Subscribe (Topic) returns (stream ResponseMessage) {}
+    rpc Publish (Topic) returns (Empty) {}
+    rpc Sync (stream SyncMessage) returns (stream SyncMessage) {}
 }
 
 message Topic {
     string name = 1;
 }
 
-message Message {
-    string msg = 1;
+message ResponseMessage {
+    string value = 1;
     string timestamp = 2;
 }
+
+message SyncMessage {
+    Topic topic = 1;
+    ResponseMessage msg = 2;
+}
+
+message Empty {}
