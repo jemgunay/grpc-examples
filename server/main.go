@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/jemgunay/grpc-test/proto"
+	pb "github.com/jemgunay/grpc-examples/proto"
 )
 
 type server struct{}

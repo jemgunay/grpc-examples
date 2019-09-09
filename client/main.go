@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/jemgunay/grpc-test/proto"
+	pb "github.com/jemgunay/grpc-examples/proto"
 )
 
 func main() {
