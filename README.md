@@ -1,4 +1,4 @@
-# Go gRPC Examples
+# Go gRPC Client/Server Variant Examples
 
 Implementations of example gRPC client/server variants written in Golang, consisting of:
 - Unary (one request, one response)
