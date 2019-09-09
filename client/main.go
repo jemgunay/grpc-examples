@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/jemgunay/grpc-test/pubsub"
+	pb "github.com/jemgunay/grpc-test/proto"
 )
 
 func main() {
@@ -20,31 +20,119 @@ func main() {
 	}
 	defer conn.Close()
 
-	client := pb.NewPublisherServiceClient(conn)
-	subscribeToTopic(client, "animals")
-	subscribeToTopic(client, "countries")
+	client := pb.NewPublisherClient(conn)
+	unaryExample(client, "animals")
+	responseStreamExample(client, "animals")
+	requestStreamExample(client, "animals")
+	bidirectionalStreamExample(client, "animals")
 }
 
-func subscribeToTopic(client pb.PublisherServiceClient, topic string) {
-	log.Printf("Subscribing to %s", topic)
+// One request, one response.
+func unaryExample(client pb.PublisherClient, topic string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := client.Subscribe(ctx, &pb.Topic{Name: topic})
+	// create request to server and receive single response
+	resp, err := client.UnaryExample(ctx, &pb.Request{Topic: topic})
 	if err != nil {
-		log.Printf("failed to subscribe to %s: %s,", topic, err)
+		log.Printf("failed to retrieve %s data: %s", topic, err)
 		return
 	}
 
+	log.Printf("[%s]: %s", topic, resp.Data)
+}
+
+// One request, multiple responses.
+func responseStreamExample(client pb.PublisherClient, topic string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// create request to server
+	stream, err := client.ResponseStreamExample(ctx, &pb.Request{Topic: topic})
+	if err != nil {
+		log.Printf("failed to subscribe to %s: %s", topic, err)
+		return
+	}
+
+	// stream multiple responses from server
 	for {
-		item, err := stream.Recv()
+		resp, err := stream.Recv()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			log.Printf("failed to read from %s subscription: %s", topic, err)
+			log.Printf("failed to retrieve %s data: %s", topic, err)
 			return
 		}
-		log.Printf("[%s]: %s", topic, item)
+		log.Printf("[%s]: %s", topic, resp.Data)
+	}
+}
+
+// Multiple requests, one response.
+func requestStreamExample(client pb.PublisherClient, topic string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// create request to server
+	stream, err := client.RequestStreamExample(ctx)
+	if err != nil {
+		log.Printf("failed to subscribe to %s: %s", topic, err)
+		return
+	}
+
+	// stream multiple requests to the server
+	for i := 0; i < 5; i++ {
+		if err := stream.Send(&pb.Request{Topic: topic}); err != nil {
+			log.Printf("failed to send %s data: %s", topic, err)
+			return
+		}
+	}
+
+	// get single response from server
+	resp, err := stream.CloseAndRecv()
+	if err != nil {
+		log.Printf("failed to retrieve %s data: %s", topic, err)
+	}
+
+	log.Printf("[%s]: %s", topic, resp.Data)
+}
+
+// Multiple requests, multiple responses.
+func bidirectionalStreamExample(client pb.PublisherClient, topic string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// create request to server
+	stream, err := client.BidirectionalStreamExample(ctx)
+	if err != nil {
+		log.Printf("failed to subscribe to %s: %s", topic, err)
+		return
+	}
+
+	// stream multiple requests to the server
+	for i := 0; i < 5; i++ {
+		if err := stream.Send(&pb.Request{Topic: topic}); err != nil {
+			log.Printf("failed to send %s data: %s", topic, err)
+			return
+		}
+	}
+
+	// signal end of requests
+	if err := stream.CloseSend(); err != nil {
+		log.Printf("failed to send close signal: %s", err)
+		return
+	}
+
+	// stream multiple responses from server
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("failed to retrieve %s data: %s", topic, err)
+			return
+		}
+		log.Printf("[%s]: %s", topic, resp.Data)
 	}
 }

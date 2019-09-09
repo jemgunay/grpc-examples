@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package example;
+
+service Publisher {
+    // One request, one response.
+    rpc UnaryExample (Request) returns (Response);
+    // One request, multiple responses.
+    rpc ResponseStreamExample (Request) returns (stream Response);
+    // Multiple requests, one response.
+    rpc RequestStreamExample (stream Request) returns (Response);
+    // Multiple requests, multiple responses.
+    rpc BidirectionalStreamExample (stream Request) returns (stream Response);
+}
+
+message Request {
+    string topic = 1;
+}
+
+message Response {
+    string data = 1;
+}

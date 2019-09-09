@@ -2,20 +2,21 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"time"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/jemgunay/grpc-test/pubsub"
+	pb "github.com/jemgunay/grpc-test/proto"
 )
 
 type server struct{}
 
 func main() {
 	grpcServer := grpc.NewServer()
-	pb.RegisterPublisherServiceServer(grpcServer, &server{})
+	pb.RegisterPublisherServer(grpcServer, &server{})
 
 	l, err := net.Listen("tcp", ":6000")
 	if err != nil {
@@ -28,29 +29,66 @@ func main() {
 	}
 }
 
-var topics = map[string][]string{
-	"animals":   {"cat", "dog", "giraffe", "hippo", "monkey", "tiger"},
-	"countries": {"Brazil", "Spain", "France", "Turkey", "Italy", "Japan"},
+var data = []string{"cat", "dog", "tiger"}
+
+// One request, one response.
+func (s *server) UnaryExample(ctx context.Context, p *pb.Request) (*pb.Response, error) {
+	log.Printf("a client requested topic %s", p.Topic)
+
+	return &pb.Response{Data: fmt.Sprintf("%v", data)}, nil
 }
 
-func (s *server) Subscribe(p *pb.Topic, stream pb.PublisherService_SubscribeServer) error {
-	log.Printf("a client subscribed to %s", p.Name)
+// One request, multiple responses.
+func (s *server) ResponseStreamExample(p *pb.Request, stream pb.Publisher_ResponseStreamExampleServer) error {
+	log.Printf("a client requested topic %s", p.Topic)
 
-	items, ok := topics[p.Name]
-	if !ok {
-		return fmt.Errorf("%s is not a supported topic", p.Name)
-	}
-
-	for _, item := range items {
-		msg := &pb.Message{
-			Msg:       item,
-			Timestamp: time.Now().String(),
-		}
-
-		if err := stream.Send(msg); err != nil {
+	// stream responses to client
+	for _, d := range data {
+		if err := stream.Send(&pb.Response{Data: d}); err != nil {
 			return err
 		}
-		time.Sleep(time.Millisecond * 500)
 	}
+	return nil
+}
+
+// Multiple requests, one response.
+func (s *server) RequestStreamExample(stream pb.Publisher_RequestStreamExampleServer) error {
+	// stream requests from client
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to retrieve topic: %s", err)
+		}
+		log.Printf("a client requested topic %s", req.Topic)
+	}
+
+	// respond with single response
+	return stream.SendAndClose(&pb.Response{Data: "ok"})
+}
+
+// Multiple requests, multiple responses.
+func (s *server) BidirectionalStreamExample(stream pb.Publisher_BidirectionalStreamExampleServer) error {
+	// stream requests from client
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to retrieve topic: %s", err)
+		}
+		log.Printf("a client requested topic %s", req.Topic)
+	}
+
+	// stream responses to client
+	for _, d := range data {
+		if err := stream.Send(&pb.Response{Data: d}); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
